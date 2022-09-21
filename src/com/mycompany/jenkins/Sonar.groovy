@@ -183,7 +183,7 @@ def setQualityGate(userToken, projectKey) {
     }
   }  
   
-  def doJSSonarScan(userToken, projectKey, projname, projversion, projsrc) {
+ def doJSSonarScan(userToken, projectKey, projname, projversion, projsrc) {
     def scannerHome = tool 'SonarJS'
     env.SONAR_SCANNER_OPTS = ''' -Djavax.net.ssl.truststore= \
                                   -Djavax.net.ssl.keystore= \
@@ -193,4 +193,4 @@ def setQualityGate(userToken, projectKey) {
     }
   }
   
-  return this
+ return this
