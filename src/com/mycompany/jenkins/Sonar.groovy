@@ -123,10 +123,10 @@ def getQualityGateStatus(branchname="") {
     url = ${getSonarBaseUrl()}/api/qualitygates/project_status?projectKey=${projectKey}&pullRequest=${pullrequest_number}"
   }
   else if (branchname!="" && !branchname.contains("master")) {
-    url = ${getSonarBaseUrl()}/api/qualitygates/project_status?projectKey=${projectKey}&branch=${branchname}"
+    url = "${getSonarBaseUrl()}/api/qualitygates/project_status?projectKey=${projectKey}&branch=${branchname}"
   }
   else {
-    url = ${getSonarBaseUrl()}/api/qualitygates/project_status?projectKey=${projectKey}"
+    url = "${getSonarBaseUrl()}/api/qualitygates/project_status?projectKey=${projectKey}"
   }
   println "url: ${url}"
   def response = doGetHttpRequest(userToken, url)
@@ -147,8 +147,50 @@ def getQualityGateStatus(branchname="") {
   return qualitygate
 }
 
-
 def getLastCommitter() {
   def last_committer = sh returnStdOut: true, script: "git log -1 --format='%an'"
   return last_committer
 }
+
+@NonCPS
+def setQualityGate(userToken, projectKey) {
+  def gateName = getQualityGateId(userToken.toString())
+  String url = "${getSonarBaseUrl()}/api/qualitygates/select?projectKey=${projectKey}&gateName=${gateName}"
+  def response = doGetHttpRequest(userToken, url)
+  String urlAlmList =""
+  if (env.CHANGE_ID!=null) {
+    urlAlmList = "${getSonarBaseUrl()}/api/alm_settings/list"
+    def responseAlmList = doGetHttpRequest(userToken, urlAlmList)
+    def alm = responseAlmList.getAt("almSettings")[0].getAt("alm")
+    def almKey = responseAlmList.getAt("almSettings")[0].getAt("key").replaceAll(' ','%20')
+    def project = projectKey.split(":")[0]
+    def repository = env.GIT_URL.split("[/]")[4]
+    def slug = env.GIT_URL.split("[/]")[5].split("[.]")[0]
+    String urlAlmSettings = ""
+    urlAlmSettings = "${getSonarBaseUrl()}/api/alm_settings/set_bitbucket_binding?almSetting=${almKey}&monorepo=false&project=${projectKey}&repository=${repository}&slug=${slug}"
+    def responseAlmSettings = doPostHttpRequest(userToken, urlAlmSettings)   
+  }
+  createBadge("${getSonarBaseUrl()}/dashboard/index/${projectKey}", "View Sonar Report")
+  return
+}  
+  
+ def setSonarProjectInformation(userToken, projectKey) {
+    try {
+      setQualityGate(userToken, projectKey)
+    }
+    catch (Exception e) {
+      println "cannot set qualitygate for project"
+    }
+  }  
+  
+  def doJSSonarScan(userToken, projectKey, projname, projversion, projsrc) {
+    def scannerHome = tool 'SonarJS'
+    env.SONAR_SCANNER_OPTS = ''' -Djavax.net.ssl.truststore= \
+                                  -Djavax.net.ssl.keystore= \
+                                  -Djavax.net.ssl.trustStorePassword='''
+    withSonarQubeEnv() {
+      sh "${scannerHome/bin/sonar-scanner} -Dsonar.projectKey=${projectKey} -Dsonar.projectName=${projname} -Dsonar.projVersion=${projversion} -Dsonar.sources=${projsrc} -Dsonar.host.url=https://localhost:9000 -Dsonar.login=token"
+    }
+  }
+  
+  return this
